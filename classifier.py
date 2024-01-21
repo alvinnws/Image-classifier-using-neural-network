@@ -2,26 +2,75 @@ import csv
 from multiprocessing import Manager, Process, freeze_support
 import cv2
 import numpy as np
-import tensorflow as tensorflow
+from sklearn.model_selection import train_test_split
+import tensorflow as tf
 import sys
 
 DATAFOLER = "cropped-by-semantic-tag/_images_data.csv"
 IMGPATH = "cropped-by-semantic-tag/"
+IMG_HEIGHT = 200
+IMG_WIDTH = 400
+NUM_CATEGORIES = 11
+CATDIC = {
+    "a": 0,
+    "h1": 1,
+    "h2": 2,
+    "h3": 3,
+    "h4": 4,
+    "header": 5,
+    "footer": 6,
+    "form": 7,
+    "input": 8,
+    "button": 9,
+    "textarea": 10
+}
 
 def main():
     f = open(DATAFOLER)
     reader = csv.reader(f)
 
-    imageCount = 200
+    imageCount = 100
     f.seek(0)
 
     imgQueue = multiImportImage(imageCount)
 
+    imgDict = {}
     for i in range(imageCount):
-        (id, image) = imgQueue.get(timeout=5)
-        cv2.imshow("", image)
+        try:
+            (id, image) = imgQueue.get(timeout=1)
+            imgDict[id] = image
+        except:
+            break
+        
+        '''cv2.imshow("", image)
         cv2.waitKey(0)
-        cv2.destroyAllWindows
+        cv2.destroyAllWindows'''
+
+    dataImages = []
+    dataLabels = []
+    count = 0
+    for row in reader:
+        if row[0] == "id":
+            continue
+        try:
+            resized = cv2.resize(imgDict[count], (IMG_HEIGHT, IMG_WIDTH))
+            dataImages.append(resized)
+            dataLabels.append(tf.keras.utils.to_categorical(CATDIC[row[1]], 11))
+            count += 1
+        except:
+            count += 1
+            continue
+        
+
+    x_train, x_test, y_train, y_test = train_test_split(
+        np.array(dataImages), np.array(dataLabels), test_size=0.4
+    )
+
+    model = get_model()
+
+    model.summary()
+
+    model.fit(x_train, y_train, epochs=10)
         
     return
 
@@ -45,7 +94,7 @@ def importImage(input, output):
     for value in iter(input.get, 'STOP'):
         id = value
         if id % 25 == 0:
-            print(id)
+            print(str(id) + " images processed")
         imagePath = IMGPATH + str(id) + ".png"
         im = cv2.imread(imagePath, cv2.IMREAD_COLOR)
 
@@ -105,7 +154,28 @@ def multiImportImage(imageCount):
 # Identify images too large
 
 # Make Model
-
+def get_model():
+    model = tf.keras.models.Sequential([
+        tf.keras.Input(shape=(IMG_WIDTH,IMG_HEIGHT,3)),
+        tf.keras.layers.Conv2D(32, 4, activation="relu"),
+        tf.keras.layers.Conv2D(30, 4, activation="relu"),
+        tf.keras.layers.Conv2D(30, 4, activation="relu"),
+        tf.keras.layers.MaxPooling2D(5),
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dropout(0.3),
+        tf.keras.layers.Dense(400, activation="relu"),
+        tf.keras.layers.Dropout(0.1),
+        tf.keras.layers.Dense(129, activation="relu"),
+        tf.keras.layers.Dropout(0.1),
+        tf.keras.layers.Dense(43, activation="relu"),
+        tf.keras.layers.Dense(NUM_CATEGORIES, activation="softmax")
+    ])
+    model.compile(
+        optimizer="adam",
+        loss="categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+    return model
 # Train Model
 
 
