@@ -21,16 +21,33 @@ def main():
     for id in range(imageCount):
         idQueue.put(id)
 
-    for i in range(4):
-        Process(target=importImage, args=(idQueue, imgQueue)).start()
+    thread1 = Process(target=importImage, args=(idQueue, imgQueue))
+    thread2 = Process(target=importImage, args=(idQueue, imgQueue))
+    thread3 = Process(target=importImage, args=(idQueue, imgQueue))
+    thread4 = Process(target=importImage, args=(idQueue, imgQueue))
 
+    thread1.start()
+    thread2.start()
+    thread3.start()
+    thread4.start()
+
+    '''
     for i in range(imageCount):
         cv2.imshow("", imgQueue.get()[1])
         cv2.waitKey(0)
-        cv2.destroyAllWindows
+        cv2.destroyAllWindows'''
     
     for i in range(4):
-        idQueue.put("STOP")
+        idQueue.put('STOP')
+
+    while not idQueue.empty():
+        continue
+
+    
+    thread1.terminate()
+    thread2.terminate()
+    thread3.terminate()
+    thread4.terminate()
 
     return
 
