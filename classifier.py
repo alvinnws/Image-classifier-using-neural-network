@@ -1,4 +1,5 @@
 import csv
+from multiprocessing import Process, Queue, freeze_support
 import cv2
 import numpy as np
 import tensorflow as tensorflow
@@ -6,6 +7,33 @@ import sys
 
 DATAFOLER = "cropped-by-semantic-tag/_images_data.csv"
 IMGPATH = "cropped-by-semantic-tag/"
+
+def main():
+    f = open(DATAFOLER)
+    reader = csv.reader(f)
+
+    imageCount = 200
+    f.seek(0)
+
+    idQueue = Queue()
+    imgQueue = Queue()
+
+    for id in range(imageCount):
+        idQueue.put(id)
+
+    for i in range(4):
+        Process(target=importImage, args=(idQueue, imgQueue)).start()
+
+    for i in range(imageCount):
+        cv2.imshow("", imgQueue.get()[1])
+        cv2.waitKey(0)
+        cv2.destroyAllWindows
+    
+    for i in range(4):
+        idQueue.put("STOP")
+
+    return
+
 
 # Return True if image is blank (all pixels same colour), false otherwise
 def blankSpace(img):
@@ -21,42 +49,28 @@ def blankSpace(img):
     return True
 
 # Load Data
-def importImages(path):
-    viable = []
-    count = 0
-    while True:
-        print(count)
-        try:
-            # Load image into variable
-            imagePath = path + str(count) + ".png"
-            im = cv2.imread(imagePath, cv2.IMREAD_COLOR)
+def importImage(input, output):
+    # Load image into variable
+    for value in iter(input.get, 'STOP'):
+        id = value
+        print(id)
+        imagePath = IMGPATH + str(id) + ".png"
+        im = cv2.imread(imagePath, cv2.IMREAD_COLOR)
 
-            # Find semantic tagged region
-            Y, X = np.where(np.all(im==[0,0,255],axis=2))
-            Y.sort()
-            X.sort()
+        # Find semantic tagged region
+        Y, X = np.where(np.all(im==[0,0,255],axis=2))
+        Y.sort()
+        X.sort()
 
-            if Y[0]+1 == Y[-1] or X[0]+1 == X[-1]:
-                count += 1
-                continue
+        # If image is not 0 pixels wide
+        if not (Y[0]+1 == Y[-1] or X[0]+1 == X[-1]):
 
             # Crop to semantic tagged region
             cropImg = im[Y[0]+1:Y[-1], X[0]+1:X[-1]]
 
-            # If image contains no information, discard
-            if blankSpace(cropImg):
-                count += 1
-                continue
-
-            count += 1
-            
-        # After cv2 passes last image, return
-        except:
-            return viable
-
-# Identify red box
-
-# Crop to red box
+            # If image contains information, put in output
+            if not blankSpace(cropImg):
+                output.put((id, cropImg))
 
 # Identify images too large
 
@@ -66,13 +80,5 @@ def importImages(path):
 
 
 if __name__ == "__main__":
-    f = open(DATAFOLER)
-    reader = csv.reader(f)
-
-    images = importImages(IMGPATH)
-    
-    for i in images:
-        cv2.imshow("", i)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows
-
+    freeze_support()
+    main()
