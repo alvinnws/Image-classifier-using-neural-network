@@ -15,45 +15,7 @@ def main():
     imageCount = 200
     f.seek(0)
 
-    idQueue = Queue()
-    imgQueue = Queue()
-
-    for id in range(imageCount):
-        idQueue.put(id)
-
-    # Create and start threads, for loop just to allow minimising the lines in VSCode
-    for i in range(1):
-        thread1 = Process(target=importImage, args=(idQueue, imgQueue))
-        thread2 = Process(target=importImage, args=(idQueue, imgQueue))
-        thread3 = Process(target=importImage, args=(idQueue, imgQueue))
-        thread4 = Process(target=importImage, args=(idQueue, imgQueue))
-
-        thread1.start()
-        thread2.start()
-        thread3.start()
-        thread4.start()
-
-    '''
-    for i in range(imageCount):
-        cv2.imshow("", imgQueue.get()[1])
-        cv2.waitKey(0)
-        cv2.destroyAllWindows'''
-    
-    # Tell children no
-    for i in range(4):
-        idQueue.put('STOP')
-
-    # Wait for image loading to finish
-    while not idQueue.empty():
-        continue
-
-    
-    # Terminate multiprocessing, for loop yet again to enable minimising
-    for i in range(1):
-        thread1.terminate()
-        thread2.terminate()
-        thread3.terminate()
-        thread4.terminate()
+    imgQueue = multiImportImage(imageCount)
 
     return
 
@@ -94,6 +56,50 @@ def importImage(input, output):
             # If image contains information, put in output
             if not blankSpace(cropImg):
                 output.put((id, cropImg))
+
+# Multiprocessing for intaking dataset
+def multiImportImage(imageCount):
+    idQueue = Queue()
+    imgQueue = Queue()
+
+    for id in range(imageCount):
+        idQueue.put(id)
+
+    # Create and start threads, for loop just to allow minimising the lines in VSCode
+    for i in range(1):
+        thread1 = Process(target=importImage, args=(idQueue, imgQueue))
+        thread2 = Process(target=importImage, args=(idQueue, imgQueue))
+        thread3 = Process(target=importImage, args=(idQueue, imgQueue))
+        thread4 = Process(target=importImage, args=(idQueue, imgQueue))
+
+        thread1.start()
+        thread2.start()
+        thread3.start()
+        thread4.start()
+
+    '''
+    for i in range(imageCount):
+        cv2.imshow("", imgQueue.get()[1])
+        cv2.waitKey(0)
+        cv2.destroyAllWindows'''
+    
+    # Tell children no
+    for i in range(4):
+        idQueue.put('STOP')
+
+    # Wait for image loading to finish
+    while not idQueue.empty():
+        continue
+
+    
+    # Terminate multiprocessing, for loop yet again to enable minimising
+    for i in range(1):
+        thread1.terminate()
+        thread2.terminate()
+        thread3.terminate()
+        thread4.terminate()
+    
+    return imgQueue
 
 # Identify images too large
 
