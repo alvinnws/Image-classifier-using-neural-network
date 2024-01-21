@@ -1,5 +1,5 @@
 import csv
-from multiprocessing import Process, Queue, freeze_support
+from multiprocessing import Manager, Process, freeze_support
 import cv2
 import numpy as np
 import tensorflow as tensorflow
@@ -17,6 +17,12 @@ def main():
 
     imgQueue = multiImportImage(imageCount)
 
+    for i in range(imageCount):
+        (id, image) = imgQueue.get(timeout=5)
+        cv2.imshow("", image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows
+        
     return
 
 
@@ -38,7 +44,8 @@ def importImage(input, output):
     # Load image into variable
     for value in iter(input.get, 'STOP'):
         id = value
-        print(id)
+        if id % 25 == 0:
+            print(id)
         imagePath = IMGPATH + str(id) + ".png"
         im = cv2.imread(imagePath, cv2.IMREAD_COLOR)
 
@@ -59,8 +66,8 @@ def importImage(input, output):
 
 # Multiprocessing for intaking dataset
 def multiImportImage(imageCount):
-    idQueue = Queue()
-    imgQueue = Queue()
+    idQueue = Manager().Queue()
+    imgQueue = Manager().Queue()
 
     for id in range(imageCount):
         idQueue.put(id)
@@ -76,12 +83,6 @@ def multiImportImage(imageCount):
         thread2.start()
         thread3.start()
         thread4.start()
-
-    '''
-    for i in range(imageCount):
-        cv2.imshow("", imgQueue.get()[1])
-        cv2.waitKey(0)
-        cv2.destroyAllWindows'''
     
     # Tell children no
     for i in range(4):
