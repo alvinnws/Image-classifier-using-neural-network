@@ -6,11 +6,14 @@ from sklearn.model_selection import train_test_split
 import tensorflow as tf
 import sys
 
+# Global variables -- Self explanatory names
 DATAFOLER = "cropped-by-semantic-tag/_images_data.csv"
 IMGPATH = "cropped-by-semantic-tag/"
-IMG_HEIGHT = 200
-IMG_WIDTH = 400
+IMG_HEIGHT = 175
+IMG_WIDTH = 350
+IMG_COUNT = 13319
 NUM_CATEGORIES = 11
+NUM_THREADS = 6
 CATDIC = {
     "a": 0,
     "h1": 1,
@@ -26,51 +29,51 @@ CATDIC = {
 }
 
 def main():
+    # Open the csv with labels as reader
     f = open(DATAFOLER)
     reader = csv.reader(f)
 
-    imageCount = 100
-    f.seek(0)
-
-    imgQueue = multiImportImage(imageCount)
-
+    # Get images loaded into dictionary of Key: Value being Img: ID
+    imgQueue = multiImportImage(IMG_COUNT)
     imgDict = {}
-    for i in range(imageCount):
+    for i in range(IMG_COUNT):
         try:
             (id, image) = imgQueue.get(timeout=1)
             imgDict[id] = image
         except:
             break
-        
-        '''cv2.imshow("", image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows'''
 
+    # Create lists for images and the associated label
     dataImages = []
     dataLabels = []
     count = 0
     for row in reader:
+        # Ignore first row
         if row[0] == "id":
             continue
         try:
+            # Resize image to input size and add it and the label to each list
             resized = cv2.resize(imgDict[count], (IMG_HEIGHT, IMG_WIDTH))
             dataImages.append(resized)
-            dataLabels.append(tf.keras.utils.to_categorical(CATDIC[row[1]], 11))
+            dataLabels.append(tf.keras.utils.to_categorical(CATDIC[row[1]], NUM_CATEGORIES))
             count += 1
+        # Error occurs for images filtered out by multiImportImage(), skips the affected image
         except:
             count += 1
             continue
         
-
+    # Split data into test and train categories
     x_train, x_test, y_train, y_test = train_test_split(
         np.array(dataImages), np.array(dataLabels), test_size=0.4
     )
 
+    # Retrieve model, print its shape using summary
     model = get_model()
-
     model.summary()
 
-    model.fit(x_train, y_train, epochs=10)
+    # Train and evaluate
+    model.fit(x_train, y_train, epochs=25)
+    model.evaluate(x_test,  y_test, verbose=2)
         
     return
 
@@ -93,7 +96,7 @@ def importImage(input, output):
     # Load image into variable
     for value in iter(input.get, 'STOP'):
         id = value
-        if id % 25 == 0:
+        if id % 250 == 0:
             print(str(id) + " images processed")
         imagePath = IMGPATH + str(id) + ".png"
         im = cv2.imread(imagePath, cv2.IMREAD_COLOR)
@@ -114,60 +117,52 @@ def importImage(input, output):
                 output.put((id, cropImg))
 
 # Multiprocessing for intaking dataset
-def multiImportImage(imageCount):
+def multiImportImage(IMG_COUNT):
+
+    # Initialise Queues
     idQueue = Manager().Queue()
     imgQueue = Manager().Queue()
-
-    for id in range(imageCount):
+    for id in range(IMG_COUNT):
         idQueue.put(id)
 
     # Create and start threads, for loop just to allow minimising the lines in VSCode
-    for i in range(1):
-        thread1 = Process(target=importImage, args=(idQueue, imgQueue))
-        thread2 = Process(target=importImage, args=(idQueue, imgQueue))
-        thread3 = Process(target=importImage, args=(idQueue, imgQueue))
-        thread4 = Process(target=importImage, args=(idQueue, imgQueue))
-
-        thread1.start()
-        thread2.start()
-        thread3.start()
-        thread4.start()
+    threads = []
+    for i in range(NUM_THREADS):
+        threads.append(Process(target=importImage, args=(idQueue, imgQueue)))
+        threads[i].start()
     
     # Tell children no
-    for i in range(4):
+    for i in range(NUM_THREADS):
         idQueue.put('STOP')
 
     # Wait for image loading to finish
     while not idQueue.empty():
         continue
 
-    
     # Terminate multiprocessing, for loop yet again to enable minimising
-    for i in range(1):
-        thread1.terminate()
-        thread2.terminate()
-        thread3.terminate()
-        thread4.terminate()
+    for i in threads:
+        i.terminate()
     
     return imgQueue
-
-# Identify images too large
 
 # Make Model
 def get_model():
     model = tf.keras.models.Sequential([
         tf.keras.Input(shape=(IMG_WIDTH,IMG_HEIGHT,3)),
         tf.keras.layers.Conv2D(32, 4, activation="relu"),
+        tf.keras.layers.Conv2D(15, 4, activation="relu"),
         tf.keras.layers.Conv2D(30, 4, activation="relu"),
-        tf.keras.layers.Conv2D(30, 4, activation="relu"),
-        tf.keras.layers.MaxPooling2D(5),
+        tf.keras.layers.MaxPooling2D(4),       
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Dense(400, activation="relu"),
-        tf.keras.layers.Dropout(0.1),
-        tf.keras.layers.Dense(129, activation="relu"),
-        tf.keras.layers.Dropout(0.1),
-        tf.keras.layers.Dense(43, activation="relu"),
+        tf.keras.layers.Dense(300, activation="relu"),
+        tf.keras.layers.Dense(300, activation="relu"),
+        tf.keras.layers.Dropout(0.4),
+        tf.keras.layers.Dense(500, activation="relu"),
+        tf.keras.layers.Dropout(0.4),
+        tf.keras.layers.Dense(200, activation="relu"),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(120, activation="relu"),
         tf.keras.layers.Dense(NUM_CATEGORIES, activation="softmax")
     ])
     model.compile(
@@ -176,9 +171,8 @@ def get_model():
         metrics=["accuracy"]
     )
     return model
-# Train Model
-
 
 if __name__ == "__main__":
+    # Multiprocessing documentation recommended to put freeze_support()
     freeze_support()
     main()
