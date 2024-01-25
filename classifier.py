@@ -4,16 +4,25 @@ import cv2
 import numpy as np
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-import sys
+import matplotlib.pyplot as plt
+
+# Optional Setting
+IGNORETEXTAREA = False # Option to ignore images with label "textarea" as there are only 12, small sample size may hinder training
+SAVEMODEL = False # If there is a desire to export the trained model
+PLOTGRAPH = True # If there is a desire to plot a graph of the training
 
 # Global variables -- Self explanatory names
-DATAFOLER = "cropped-by-semantic-tag/_images_data.csv"
-IMGPATH = "cropped-by-semantic-tag/"
+LABELINFO = "cropped-by-semantic-tag/_images_data.csv" # Label file
+IMGPATH = "cropped-by-semantic-tag/" # Folder with images
+CPFILENAME = "save" # Folder name of model which will be saved
+NUM_THREADS = 11 # 11 brings CPU util to 100% on my machine, change if necessary
+IMG_COUNT = 13319 # Number of images to train and test with
+EPOCHS = 200 # Number of epochs to train over
+GRAPHAVERAGE = 3 # Odd numbers only, number of values to average over before plotting graph
+# Recommended not to modify values beneath this comment
 IMG_HEIGHT = 175
 IMG_WIDTH = 350
-IMG_COUNT = 13319
-NUM_CATEGORIES = 11
-NUM_THREADS = 6
+NUM_CATEGORIES = 10 if IGNORETEXTAREA else 11
 CATDIC = {
     "a": 0,
     "h1": 1,
@@ -30,7 +39,7 @@ CATDIC = {
 
 def main():
     # Open the csv with labels as reader
-    f = open(DATAFOLER)
+    f = open(LABELINFO)
     reader = csv.reader(f)
 
     # Get images loaded into dictionary of Key: Value being Img: ID
@@ -43,7 +52,39 @@ def main():
         except:
             break
 
-    # Create lists for images and the associated label
+    # Split data into test and train categories
+    dataImages, dataLabels = listFromDict(imgDict, reader)        
+    x_train, x_test, y_train, y_test = train_test_split(
+        np.array(dataImages), np.array(dataLabels), test_size=0.35
+    )
+
+    # Retrieve model, print its shape using summary
+    model = get_model()
+    model.summary()
+
+    # Ability to toggle between saving the model or not, based on lowest validation loss
+    if SAVEMODEL:
+        checkpoint = "./checkpoints/" + CPFILENAME
+        model_checkpoint = tf.keras.callbacks.ModelCheckpoint(
+            filepath=checkpoint,
+            monitor="val_loss",
+            mode="min",
+            )
+
+    # Train and evaluate
+    history = model.fit(x_train, y_train,
+            epochs=EPOCHS,
+            validation_data=(x_test, y_test),
+            callbacks=[model_checkpoint] if SAVEMODEL else None
+            )
+    model.evaluate(x_test,  y_test, verbose=2)
+
+    # Plots graph of training if requested
+    if PLOTGRAPH: showGraph(history, (GRAPHAVERAGE-1)/2)
+    return
+
+# Create lists for images and the associated label
+def listFromDict(imgDict, reader):
     dataImages = []
     dataLabels = []
     count = 0
@@ -52,6 +93,9 @@ def main():
         if row[0] == "id":
             continue
         try:
+            if IGNORETEXTAREA and row[1] == "textarea":
+                count+= 1
+                continue
             # Resize image to input size and add it and the label to each list
             resized = cv2.resize(imgDict[count], (IMG_HEIGHT, IMG_WIDTH))
             dataImages.append(resized)
@@ -61,22 +105,37 @@ def main():
         except:
             count += 1
             continue
-        
-    # Split data into test and train categories
-    x_train, x_test, y_train, y_test = train_test_split(
-        np.array(dataImages), np.array(dataLabels), test_size=0.4
-    )
+    return dataImages, dataLabels
 
-    # Retrieve model, print its shape using summary
-    model = get_model()
-    model.summary()
+# Takes in a model history and n, plots a graph over epochs, averaged y values by 2n+1
+# Skips first epoch as it tends to skew the graph
+def showGraph(history, n):
+    trainLoss = history.history["loss"]
+    validLoss = history.history["val_loss"]
+    validAccy = history.history["val_accuracy"]
 
-    # Train and evaluate
-    model.fit(x_train, y_train, epochs=25)
-    model.evaluate(x_test,  y_test, verbose=2)
-        
+    averagedTrainLoss, averagedValidLoss, averagedValidAccy = [], [], []
+    for i in range(1, len(trainLoss)):
+        added, midTLoss, midVLoss, midVAccy = 0, 0, 0, 0
+        # Average over 2n+1
+        for j in range(-n, n+1):
+            try:
+                midTLoss += trainLoss[i+j]
+                midVLoss += validLoss[i+j]
+                midVAccy += validAccy[i+j]
+                added += 1
+            except:
+                continue
+        averagedTrainLoss.append((midTLoss)/added)
+        averagedValidLoss.append((midVLoss)/added)
+        averagedValidAccy.append((midVAccy)/added)
+
+    plt.plot(range(2,EPOCHS+1),averagedTrainLoss, label="Training Loss")
+    plt.plot(range(2,EPOCHS+1),averagedValidLoss, label="Validation Loss")
+    plt.plot(range(2,EPOCHS+1),averagedValidAccy, label="Validation Accuracy")
+    plt.legend(loc='best')
+    plt.show()
     return
-
 
 # Return True if image is blank (all pixels same colour), false otherwise
 def blankSpace(img):
@@ -96,7 +155,7 @@ def importImage(input, output):
     # Load image into variable
     for value in iter(input.get, 'STOP'):
         id = value
-        if id % 250 == 0:
+        if id % 1000 == 0:
             print(str(id) + " images processed")
         imagePath = IMGPATH + str(id) + ".png"
         im = cv2.imread(imagePath, cv2.IMREAD_COLOR)
@@ -149,20 +208,16 @@ def multiImportImage(IMG_COUNT):
 def get_model():
     model = tf.keras.models.Sequential([
         tf.keras.Input(shape=(IMG_WIDTH,IMG_HEIGHT,3)),
-        tf.keras.layers.Conv2D(32, 4, activation="relu"),
-        tf.keras.layers.Conv2D(15, 4, activation="relu"),
-        tf.keras.layers.Conv2D(30, 4, activation="relu"),
+        tf.keras.layers.Conv2D(28, 4, activation="relu"),
+        tf.keras.layers.Conv2D(20, 4, activation="relu"),
         tf.keras.layers.MaxPooling2D(4),       
         tf.keras.layers.Flatten(),
         tf.keras.layers.Dropout(0.3),
-        tf.keras.layers.Dense(300, activation="relu"),
-        tf.keras.layers.Dense(300, activation="relu"),
+        tf.keras.layers.Dense(70, activation="relu"),
         tf.keras.layers.Dropout(0.4),
-        tf.keras.layers.Dense(500, activation="relu"),
+        tf.keras.layers.Dense(60, activation="relu"),
         tf.keras.layers.Dropout(0.4),
-        tf.keras.layers.Dense(200, activation="relu"),
-        tf.keras.layers.Dropout(0.2),
-        tf.keras.layers.Dense(120, activation="relu"),
+        tf.keras.layers.Dense(40, activation="relu"),
         tf.keras.layers.Dense(NUM_CATEGORIES, activation="softmax")
     ])
     model.compile(
