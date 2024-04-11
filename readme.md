@@ -1,5 +1,5 @@
 # Neural Network to classify images by semantic tags
-Data taken from Firejet take home interview question
+Data not publicly available
 
 ## Context
 The work shown in this repository is meant as my solution to the Firejet take home interview question. The model is a simple model that at its best has about 1.12 validation loss when training. After training when used to classify the entire initial data folder, there is about 0.6 loss with 78% accuracy.
