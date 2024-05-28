@@ -2,7 +2,7 @@
 Data not publicly available
 
 ## Context
-The work shown in this repository is meant as my solution to the Firejet take home interview question. The model is a simple model that at its best has about 1.12 validation loss when training. After training when used to classify the entire initial data folder, there is about 0.6 loss with 78% accuracy.
+The work shown in this repository had data taken from a private entity. The model is a simple model that at its best has about 1.12 validation loss when training. After training when used to classify the entire initial data folder, there is about 0.6 loss with 78% accuracy.
 
 ### Considerations
 Firstly, I noticed the data was not the cleanest. Some images are either misrepresented by the label or do not have a fitting label within the csv file. Regardless, I assumed the data was not to be touched manually so my processing was done via code.
